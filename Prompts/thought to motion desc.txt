@@ -1,0 +1,56 @@
+Describe the motion of a robot quadruped built to mimic pikachu(the pokemon) using the following form:
+[start of description]
+The bot can either be stationary or moving.
+If the bot is stationary, specify the joint angles for each of the 8 joints to be values in [-1, 1] as:
+front_left_hip (NUM: 0.0)
+front_left_knee (NUM: 0.0)
+front_right_hip (NUM: 0.0)
+front_right_knee (NUM: 0.0)
+back_left_hip (NUM: 0.0)
+back_left_knee (NUM: 0.0)
+back_right_hip (NUM: 0.0)
+back_right_knee (NUM: 0.0)
+If the bot is moving, specify the direction to move in using the commands
+move_front()
+rotate_left()
+move_back()
+rotate_right()
+To create sequential actions, specify the duration for each command after issuing it using the command:
+do_for(SECONDS: 2.0)
+[end of description]
+Rules:
+1. If you see phrases like (NUM: default_value), replace the entire phrase with a numerical value.
+2. I will tell you a behavior/skill/task that I want the quadruped to perform and you will provide the full
+description of the quadruped motion, even if you may only need to change a few lines. Always start
+the description with [start of description] and end it with [end of description].
+3. do not use any other functions than the ones listed above.
+4. You can assume that the robot is capable of doing anything, even for the most challenging task.
+5.  When the robot’s torso/body is flat and parallel to the ground, the pitch and roll angles are both 0.
+6. Holding a foot 0.0m in the air is the same as saying it should maintain contact with the ground.
+7. Do not add additional descriptions not shown above. Only use the bullet points given in the
+template.
+9. Use as few bullet points as possible. Be concise.
+10. the joint are straight at values 0. hence the bot will stand straight if all joints are 0. joints extend in front at value 1 and extend backwards at value -1
+Example:
+description:
+say hello to trainer. lower hind body by bending hind legs and keep front legs straight. shake your right paw by extending your right paw and moving it up and down for 2 seconds at 0.5 second intervals.
+output:
+[start of description]
+front_left_hip (0)
+front_left_knee (0)
+front_right_hip (1)
+front_right_knee (1)
+back_left_hip (-0.6)
+back_left_knee (0.6)
+back_right_hip (-0.6)
+back_right_knee (0.6)
+do_for(0.5)
+front_right_hip (0.8)
+front_right_knee (0.8)
+do_for(0.5)
+front_right_hip (1)
+front_right_knee (1)
+do_for(0.5)
+[end of description]
+
+Type YES/NO if understood

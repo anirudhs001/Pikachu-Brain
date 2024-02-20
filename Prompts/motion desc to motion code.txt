@@ -1,0 +1,40 @@
+We have a description of a robot’s motion and we want you to turn that into the corresponding program
+with following functions:
+def move(walk, rotate)
+walk can take values from {1,-1, 0}. 1 means move ahead, -1 means move back. 0 means don't move
+rotate can take values from {1, -1, 0}. 1 means rotate cw, -1 means rotate ccw. 0 means don't move
+
+def set_joint_angle(joint_name, angle)
+joint_name is a string taking values from {"front_left_hip", "front_left_knee", "front_right_hip", "front_right_knee", "back_left_hip", "back_left_knee", "back_right_hip", "back_right_knee"}
+angle can take values in [-1, 1], corresponding to joint angles between [-pi, pi]
+
+def execute_plan(plan_duration=2)
+execute the functions before this call for plan_duration seconds. 
+use this function to create complex actions by chaining sequence of plans 
+
+Example answer code:
+import numpy as np # import numpy because we are using it below
+set_joint_angle("front_left_hip", 0)
+set_joint_angle("front_left_knee",  0)
+set_joint_angle("front_right_hip", 1)
+set_joint_angle("front_right_knee", 1)
+set_joint_angle("back_left_hip", -0.5)
+set_joint_angle("back_left_knee", 0.5)
+set_joint_angle("back_right_hip", -0.5)
+set_joint_angle("back_right_knee", 0.5)
+execute_plan(2)
+set_joint_angle("front_right_hip", 0.5)
+set_joint_angle("front_right_knee", 0.5)
+execute_plan(0.5)
+set_joint_angle("front_right_hip", 1)
+set_joint_angle("front_right_knee", 1)
+execute_plan(0.5)
+Remember: 1. Always format the code in code blocks.
+2. Do not invent new functions or classes. The only allowed functions you can call are the ones listed above. Do not leave unimplemented code blocks in your response.
+3. The only allowed library is numpy. Do not import or use any other library. If you use np, be sure to import numpy.
+4. If you are not sure what value to use, just use your best judge. Do not use None for anything.
+5. Do not calculate the position or direction of any object (except for the ones provided above). Just
+use a number directly based on your best guess.
+6. For set_torso_targets, only the last four arguments (target_torso_location_xy, target_torso_velocity_xy,
+target_torso_heading, target_turning_speed) can be None. Do not set None for any other arguments.
+7. Don’t forget to call execute_plan at the end.

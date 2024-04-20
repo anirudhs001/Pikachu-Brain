@@ -8,6 +8,7 @@ from ferret import (
 )
 from transformers import CLIPProcessor, CLIPModel
 from transformers import AutoModelForCausalLM, AutoTokenizer
+from llama_cpp import Llama
 import torch
 from typing import List, Tuple
 import numpy as np
@@ -23,19 +24,42 @@ DEFAULT_IM_H = 336
 DEVICE = "mps"
 
 PIKACHU_PROMPT = f"A chat between a human and his pet PIKACHU that understands visuals.\
-Act as if you are the pokemon. ONLY DESCRIBE WHAT ACTIONS THE POKEMON WOULD TAKE. Use English."
+Act as if you are the pokemon. Very briefly respond to the situations as if pikachu would.\
+After every sentence, add a small sentence or word describing pikachu's facial expression in curly braces '{' '}'.\
+JUST RESPOND TO THE USER'S PROMPT, DO NOT ADD THE USER'S SIDE OF THE CONVERSATION.\
+DO NOT HALLUCINATE WHAT THE USER DOES. ONLY GENERATE PIKACHU'S RESPONSES\
+DESCRIBE WHAT ACTIONS THE POKEMON WOULD TAKE. Use English.\
+ALWAYS END PIKACHU'S RESPONSES WITH <s>."
 
 
 def insert_faces(text, images, processor, model, match_window=10):
     words = text.split(" ")
-    text_segments = []
-    for i in range(math.ceil(len(words) // match_window) + 1):
-        text_segment = words[i * match_window : min((i + 1) * match_window, len(words))]
-        text_segment = " ".join(text_segment)
-        text_segments.append(text_segment)
+    # text_segments = []
+    # for i in range(math.ceil(len(words) // match_window) + 1):
+    #     text_segment = words[i * match_window : min((i + 1) * match_window, len(words))]
+    #     text_segment = " ".join(text_segment)
+    #     text_segments.append(text_segment)
+    face_descs = []
+    for i, word in enumerate(words):
+        word = word.strip()
+        if len(word) == 0:
+            continue
+        if word[0] == "{":
+            face_desc = []
+            for w in words[i:]:
+                face_desc.append(w)
+                w = w.strip()
+                if len(w) == 0:
+                    continue
+                if w.strip()[-1] == "}":
+                    break
+            face_desc = " ".join(face_desc)
+            face_descs.append(face_desc)
 
+    if len(face_descs) == 0:
+        face_descs = ["pikachu smiling"]
     inputs = processor(
-        text=text_segments, images=images, return_tensors="pt", padding=True
+        text=face_descs, images=images, return_tensors="pt", padding=True
     )
 
     outputs = model(**inputs)
@@ -46,7 +70,7 @@ def insert_faces(text, images, processor, model, match_window=10):
     for row_num in range(probs.shape[0]):
         sample_idx = torch.multinomial(probs[row_num], 1)
         face_idx.append(sample_idx)
-        out_text += f"<face:{int(sample_idx)+1}> " + text_segments[row_num]
+        out_text += f"<face:{int(sample_idx)+1}> " + face_descs[row_num]
     return out_text
 
 
@@ -179,24 +203,44 @@ def infer_mistral_8x7b():
 
 
 class Mistral:
+    def __init__(self, model_path="models/mistral-7b-instruct-v0.2.Q5_K_M.gguf") -> None:
+        self.model = Llama(
+            model_path=model_path,
+            n_ctx=32768,  # The max sequence length to use - note that longer sequence lengths require much more resources
+            n_threads=8,  # The number of CPU threads to use, tailor to your system and the resulting performance
+            n_gpu_layers=35,
+        )
+        self.messages = messages = [
+            {"role": "user", "content": f"{PIKACHU_PROMPT}"},
+            {"role": "system", "content": "Understood <s>"},
+        ]
 
-    def __init__(self, model_id="mistralai/Mistral-7B-Instruct-v0.2") -> None:
-        self.tokenizer = AutoTokenizer.from_pretrained(model_id)
-        self.model = AutoModelForCausalLM.from_pretrained(
-            model_id,
-            torch_dtype=torch.float16,
-            # use_flash_attention_2=True,
-        ).to(DEVICE)
+    def make_prompt(self):
+        prompt = ""
+        for i, message in enumerate(self.messages):
+            role, content = message["role"], message["content"]
+            if i == 0:
+                prompt += "<s>"
+            if role == "user":
+                prompt += f"[INST] {content} [INST]\n"
+            else:
+                prompt += f"{content}\n"
+        return prompt
 
     @torch.inference_mode()
-    def infer(self, messages: List):
-        print("encoding")
-        encodeds = self.tokenizer.apply_chat_template(messages, return_tensors="pt").to(DEVICE)
-        print("generating")
-        outputs = self.model.generate(encodeds, max_new_tokens=100, do_sample=True)
-        print("decoding")
-        curr_out = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
-        return {"cur_out": curr_out}
+    def infer(self, text_message: str):
+        print("inside infer()")
+        self.messages.append({"role": "user", "content": text_message})
+        prompt = self.make_prompt()
+        out = self.model(
+            prompt,
+            max_tokens=50,  # Generate up to 512 tokens
+            stop=["<s>", "\n\n", "["],   # Example stop token - not necessarily correct for this specific model! Please check before using.
+            echo=False,        # Whether to echo the prompt
+        )
+        cur_out = out["choices"][0]["text"]
+        self.messages.append({"role": "system", "content": cur_out})
+        return cur_out
 
 
 def serve(server_port=5555, save_images=False):
@@ -241,8 +285,8 @@ def serve(server_port=5555, save_images=False):
     pbar.refresh()
     clip_model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32")
     processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
-    num_images = len(glob("../faces/*.png"))
-    images = [Image.open(f"../faces/Picture {i}.png") for i in range(1, num_images)]
+    num_images = len(glob("faces/*.png"))
+    images = [Image.open(f"faces/Picture {i}.png") for i in range(1, num_images)]
     pbar.update(1)
     pbar.set_description("done")
     pbar.refresh()
@@ -251,11 +295,6 @@ def serve(server_port=5555, save_images=False):
     print(f"Server listening on port {server_port}")
 
     while True:
-        messages = [
-            {"role": "user", "content": PIKACHU_PROMPT},
-            {"role": "assistant", "content": "understood"},
-        ]
-
         print("Waiting for connection...")
         client_socket, client_address = server_socket.accept()
         print(f"Connection established with {client_address}")
@@ -290,13 +329,8 @@ def serve(server_port=5555, save_images=False):
                 # assist_out = infer_ferret(
                 #     tokenizer, model, image_processor, context_len, messages, image
                 # )
-                messages.append({"role": "user", "content": text_message})
-                assist_out = mistral.infer(messages)
+                assist_out = mistral.infer(text_message)
                 print(assist_out)
-                assist_out = assist_out["cur_out"]
-                # messages.append(["AI", assist_out])
-                messages.append({"role": "assistant", "content": assist_out})
-                print("assist_out", assist_out)
                 # insert face idxs
                 assist_out = insert_faces(assist_out, images, processor, clip_model)
                 client_socket.sendall(assist_out.encode("utf-8"))

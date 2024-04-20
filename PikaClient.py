@@ -10,7 +10,8 @@ import time
 import cv2
 import queue
 import threading
-
+import matplotlib.pyplot as plt
+import matplotlib.image as mpimg
 
 def resize_image(image):
     max_hw, min_hw = max(image.size), min(image.size)
@@ -56,21 +57,10 @@ def send_text_and_image(
 
 
 # Function to continuously update and display the image
-def update_image(image_queue):
-    window_width, window_height = 100, 100
-    # cv2.namedWindow("Pikachu", cv2.WINDOW_NORMAL)
-    # cv2.resizeWindow("Pikachu", window_width, window_height)
-    try:
-        while True:
-            try:
-                # Get the latest image from the queue
-                image = image_queue.get(timeout=1)
-                cv2.imshow("Image", image)
-                cv2.waitKey(0)
-            except queue.Empty:
-                pass
-    finally:
-        cv2.destroyAllWindows()
+def update_image(imgplot, img):
+    imgplot.set_data(img)
+    plt.draw()
+    plt.pause(0.001)  # Pause to update the plot
 
 
 if __name__ == "__main__":
@@ -90,8 +80,10 @@ if __name__ == "__main__":
     # image_thread.start()
 
     # load images in mem
-    num_images = len(glob("../faces/*.png"))
-    images = [cv2.imread(f"../faces/Picture {i}.png") for i in range(1, num_images)]
+    num_images = len(glob("faces/*.png"))
+    images = [mpimg.imread(f"faces/Picture {i}.png") for i in range(1, num_images)]
+    imgplot = plt.imshow(images[0])
+    plt.ion()  # Turn interactive mode on
 
     # panel = Label(window, image=images[0])
     # panel.pack()
@@ -116,8 +108,9 @@ if __name__ == "__main__":
             if "<face" in word:
                 face_idx = int(re.findall(pattern, resp)[0])
                 # image_queue.put(images[face_idx])
-                cv2.imshow("image", images[face_idx])
-                cv2.waitKey(0)
+                update_image(imgplot, images[face_idx])
+                # cv2.imshow("image", images[face_idx])
+                # cv2.waitKey(0)
             else:
                 print(word, end=" ")
                 time.sleep(0.1)
